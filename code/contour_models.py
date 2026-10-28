@@ -18,14 +18,14 @@ from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
 
-def logistic_en(max_iter: int, random_state: int = 42) -> LogisticRegression:
+def logistic_en(max_iter: int, random_state: int) -> LogisticRegression:
     return LogisticRegression(
         penalty="elasticnet", solver="saga", l1_ratio=0.2, C=2.0,
         max_iter=max_iter, class_weight="balanced", random_state=random_state,
     )
 
 
-def build_eight_analyte_models(random_state: int = 42) -> dict[str, object]:
+def build_eight_analyte_models(random_state: int) -> dict[str, object]:
     """Twelve individual classifiers and Stack, in Supplementary Table 4 order."""
     models = {
         "AdaBoost": AdaBoostClassifier(
@@ -75,7 +75,7 @@ def build_eight_analyte_models(random_state: int = 42) -> dict[str, object]:
     return models
 
 
-def build_stack_model(random_state: int = 42, base_models: dict | None = None) -> StackingClassifier:
+def build_stack_model(random_state: int, base_models: dict | None = None) -> StackingClassifier:
     if base_models is None:
         # The full factory supplies base_models, so this call does not recurse.
         return build_eight_analyte_models(random_state)["Stack"]

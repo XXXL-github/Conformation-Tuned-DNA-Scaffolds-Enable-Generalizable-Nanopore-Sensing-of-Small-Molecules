@@ -15,9 +15,13 @@ from sklearn.naive_bayes import GaussianNB
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "code"))
 import contour_ml_common as common
 from contour_models import build_eight_analyte_models
+from run_eight_analyte_classification import parse_args
 
 
-def synthetic_events(classes, n=24, seed=42, experiment="development"):
+TEST_RANDOM_STATE = int(np.random.default_rng().integers(np.iinfo(np.int32).max))
+
+
+def synthetic_events(classes, n=24, seed=None, experiment="development"):
     rng = np.random.default_rng(seed)
     y = np.repeat(np.arange(len(classes)), n)
     X = rng.normal(size=(len(y), 8)) + y[:, None] * 0.3
@@ -29,8 +33,16 @@ def synthetic_events(classes, n=24, seed=42, experiment="development"):
 
 
 class SpecificationTests(unittest.TestCase):
+    def test_training_requires_an_explicit_random_state(self):
+        arguments = ["classification", "train", "--development", "external.csv",
+                     "--output-dir", "local-output"]
+        with patch.object(sys, "argv", arguments), patch("sys.stderr"):
+            with self.assertRaises(SystemExit) as error:
+                parse_args()
+        self.assertEqual(error.exception.code, 2)
+
     def test_table4_model_names_and_elastic_net(self):
-        models = build_eight_analyte_models()
+        models = build_eight_analyte_models(TEST_RANDOM_STATE)
         self.assertEqual(list(models), ["AdaBoost", "Logistic-EN", "kNN", "QDA", "SVM-RBF",
                          "GaussianNB", "CatBoost", "ExtraTrees", "Random Forest", "LightGBM",
                          "HistGBDT", "XGBoost", "Stack"])
@@ -39,15 +51,15 @@ class SpecificationTests(unittest.TestCase):
             p = estimator.get_params()
             self.assertEqual((p["penalty"], p["solver"], p["l1_ratio"], p["C"], p["max_iter"],
                               p["class_weight"], p["random_state"]),
-                             ("elasticnet", "saga", 0.2, 2.0, iterations, "balanced", 42))
+                             ("elasticnet", "saga", 0.2, 2.0, iterations, "balanced", TEST_RANDOM_STATE))
         self.assertEqual(models["Stack"].cv, 3)
         self.assertEqual(models["Stack"].stack_method, "predict_proba")
         self.assertEqual([name for name, _ in models["Stack"].estimators], ["svm", "rf", "xgb", "gnb"])
 
     def test_manuscript_split_counts_and_reproducibility(self):
         y = np.repeat(np.arange(8), 400)
-        train, validation = common.development_split(y)
-        again = common.development_split(y)
+        train, validation = common.development_split(y, TEST_RANDOM_STATE)
+        again = common.development_split(y, TEST_RANDOM_STATE)
         self.assertEqual((len(train), len(validation)), (2400, 800))
         self.assertFalse(set(train) & set(validation))
         np.testing.assert_array_equal(np.bincount(y[train]), np.repeat(300, 8))
@@ -96,18 +108,18 @@ class SpecificationTests(unittest.TestCase):
 
     def test_test_stage_never_fits_or_changes_selection(self):
         df, X, y = synthetic_events(common.EIGHT_ANALYTE_CLASSES)
-        test_df, test_X, test_y = synthetic_events(common.EIGHT_ANALYTE_CLASSES, n=8, seed=5, experiment="test")
+        test_df, test_X, test_y = synthetic_events(common.EIGHT_ANALYTE_CLASSES, n=8, experiment="test")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with patch.object(common, "build_eight_analyte_models", return_value={"Stack": GaussianNB()}):
-                bundle = common.train_development(df, X, y, root / "training")
+                bundle = common.train_development(df, X, y, root / "training", TEST_RANDOM_STATE)
             selection = bundle["selected_by_validation"]
             with patch.object(bundle["models"]["Stack"], "fit", side_effect=AssertionError("Test must never fit")):
                 first = common.evaluate_independent_test(bundle, test_df, test_X, test_y, root / "test")
                 common.evaluate_independent_test(bundle, test_df, test_X, (test_y + 1) % 8, root / "relabeled")
             self.assertEqual(bundle["selected_by_validation"], selection)
             self.assertEqual(first["partition"].tolist(), ["independent_test"])
-            train, _ = common.development_split(y)
+            train, _ = common.development_split(y, TEST_RANDOM_STATE)
             np.testing.assert_allclose(bundle["models"]["Stack"].theta_,
                                        GaussianNB().fit(X[train], y[train]).theta_)
 
@@ -117,7 +129,7 @@ class RuntimeSmokeTests(unittest.TestCase):
         _, X, y = synthetic_events(common.ESTROGEN_CLASSES, n=16)
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "estrogens"
-            scores = common.evaluate_stack_oof(X, y, output)
+            scores = common.evaluate_stack_oof(X, y, output, TEST_RANDOM_STATE)
             self.assertEqual(scores["partition"].tolist(), ["5-fold OOF validation"])
             assignment = pd.read_csv(output / "validation_folds.csv")
             self.assertEqual(len(assignment), len(y))
@@ -125,8 +137,8 @@ class RuntimeSmokeTests(unittest.TestCase):
 
     def test_all_thirteen_prespecified_models_fit_and_predict(self):
         _, X, y = synthetic_events(common.EIGHT_ANALYTE_CLASSES, n=32)
-        train, validation = common.development_split(y)
-        for name, definition in build_eight_analyte_models().items():
+        train, validation = common.development_split(y, TEST_RANDOM_STATE)
+        for name, definition in build_eight_analyte_models(TEST_RANDOM_STATE).items():
             with self.subTest(model=name):
                 fitted = clone(definition).fit(X[train], y[train])
                 probabilities = fitted.predict_proba(X[validation])

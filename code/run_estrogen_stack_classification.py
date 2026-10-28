@@ -11,7 +11,7 @@ def main() -> None:
     parser.add_argument("--input", type=Path, required=True, help="External feature table; not bundled with code.")
     parser.add_argument("--sheet", default="Expanded_Data")
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--random-state", type=int, default=42)
+    parser.add_argument("--random-state", type=int, required=True)
     args = parser.parse_args()
     _, X, y = load_feature_table(args.input, ESTROGEN_CLASSES, args.sheet)
     print(evaluate_stack_oof(X, y, args.output_dir, args.random_state).to_string(index=False))

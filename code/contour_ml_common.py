@@ -19,7 +19,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from contour_models import build_eight_analyte_models, build_stack_model
 
 
-FEATURES = ("I/I0", "ΔSD", "skew", "median I/I0", "toff", "kurt", "IQR I/I0", "CV")
+FEATURES = ("I/I0", "��SD", "skew", "median I/I0", "toff", "kurt", "IQR I/I0", "CV")
 LABEL = "Analyte"
 EIGHT_ANALYTE_CLASSES = ("Mal", "IsoMal", "Mal3", "IsoMal3", "3-DG", "5-AMF", "5-EMF", "5-HMF")
 ESTROGEN_CLASSES = ("NIL", "EE2", "MES")
@@ -84,7 +84,7 @@ def check_counts(y: np.ndarray, classes: tuple, per_class: int, description: str
         raise ValueError(f"{description} requires {per_class} events per analyte; got {dict(zip(classes, counts.tolist()))}")
 
 
-def development_split(y: np.ndarray, random_state: int = 42) -> tuple[np.ndarray, np.ndarray]:
+def development_split(y: np.ndarray, random_state: int) -> tuple[np.ndarray, np.ndarray]:
     """The same stratified 75/25 development split is reused for all models."""
     return train_test_split(np.arange(len(y)), test_size=0.25, stratify=y, random_state=random_state)
 
@@ -146,7 +146,7 @@ def export_predictions(output: Path, name: str, y: np.ndarray, pred: np.ndarray,
 
 
 def train_development(df: pd.DataFrame, X: np.ndarray, y: np.ndarray, output: Path,
-                      random_state: int = 42, learning_curve: bool = False) -> dict:
+                      random_state: int, learning_curve: bool = False) -> dict:
     train, validation = development_split(y, random_state)
     if feature_hashes(X[train]) & feature_hashes(X[validation]):
         raise ValueError("Exact feature vectors overlap training/validation; verify event provenance.")
@@ -251,7 +251,7 @@ def apply_confidence_thresholds(proba: np.ndarray, classes: tuple, thresholds: d
 
 
 def evaluate_stack_oof(X: np.ndarray, y: np.ndarray, output: Path,
-                        random_state: int = 42) -> pd.DataFrame:
+                        random_state: int) -> pd.DataFrame:
     """Preserve the archived estrogen 5-fold validation; it is not independent testing."""
     if np.bincount(y, minlength=3).min() < 5:
         raise ValueError("Estrogen 5-fold validation requires at least five events per class.")

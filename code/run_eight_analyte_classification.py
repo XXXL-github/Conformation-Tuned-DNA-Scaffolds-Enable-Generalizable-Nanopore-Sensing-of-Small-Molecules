@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
     commands = parser.add_subparsers(dest="command", required=True)
     train = commands.add_parser("train", help="Split development events 75/25; fit and validate 13 models.")
     train.add_argument("--development", type=Path, required=True, help="External 3200-event development table.")
-    train.add_argument("--random-state", type=int, default=42)
+    train.add_argument("--random-state", type=int, required=True)
     train.add_argument("--learning-curve", action="store_true", help="Export raw Stack train/validation learning curves.")
     test = commands.add_parser("test", help="Evaluate frozen models on 800 events from separate experiments.")
     test.add_argument("--test", type=Path, required=True, help="External independent-test table, not a random holdout.")
